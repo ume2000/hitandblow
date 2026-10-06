@@ -116,7 +116,7 @@ function render(){
       (!S.cfg.tn?grp('観戦',opt('sp',1,'許可')+opt('sp',0,'不可')):'')+
       grp('ランキング',opt('rk',1,'記録')+opt('rk',0,'記録しない'))
       :`<div>${cfgTxt(S.cfg)}</div>`}</div>
-      <div class="pn"><div class="t">参加者</div>${S.players.map((p,i)=>`<div style="padding:3px 0">${i+1}. ${esc(S.peerNames?.get(p)||playerLabel(p))}${p===S.peer.id?'（あなた）':''}</div>`).join('')}</div>
+      <div class="pn"><div class="t">参加者</div>${S.players.map((p,i)=>`<div style="padding:3px 0">${i+1}. ${esc(S.peerNames?.get(p)\vert{}\vert{}playerLabel(p))}${p===S.peer.id?'（あなた）':''}</div>`).join('')}</div>
       ${S.isHost?`<button class="m" id="start" ${S.players.length<need?'disabled':''}>${S.players.length<need?`あと${need-S.players.length}人待っています`:'この設定で開始'}</button>`:'<div class="ctr" style="color:var(--mu)">ホストの開始を待っています…</div>'}
       <div class="copy">相手にはルームコード「${esc(S.code)}」を伝えてください</div>`;
   }else if(sc==='full'){
@@ -176,16 +176,6 @@ function broadcast(msg,except){
 }
 function statePacket(){return {type:'state',players:S.players,cfg:S.cfg,names:[...S.peerNames.entries()]}}
 function hostBroadcastState(){if(S.isHost)broadcast(statePacket())}
-function peerName(id){return S.peerNames?.get(id)||playerLabel(id)}
-function setupPeer(){
-  return new Promise((resolve,reject)=>{
-    const id=S.isHost?`hb-${S.code}`:undefined;
-    S.peer=new Peer(id);
-    S.peer.on('open',()=>resolve());
-    S.peer.on('error',e=>reject(e));
-    S.peer.on('connection',c=>{if(S.isHost)hostAccept(c)});
-  });
-}
 function hostAccept(c){
   if(S.connections.size >= (S.cfg.tn?3:1)){c.on('open',()=>c.send({type:'full'}));return}
   c.on('open',()=>{
@@ -222,30 +212,60 @@ function gameRelay(c,d){
 }
 async function joinRoom(){
   S.name=($('name')?.value||S.name).trim()||'名無し';
-  S.message='';
+  S.message='接続中…';
+  render();
   if(!S.code){S.message='コードを入力してください';render();return}
-  try{
-    if(S.peer)S.peer.destroy();
-    S.isHost=false;S.peerNames=new Map();
-    await setupPeer();
-    const hostId=`hb-${S.code}`;
-    const c=S.peer.connect(hostId,{reliable:true,metadata:{name:S.name}});
-    S.hostConn=c;
-    c.on('open',()=>{c.send({type:'hello',name:S.name});S.screen='room';render()});
-    c.on('data',handleClientData);
-    c.on('close',()=>{S.message='ホストとの接続が切れました';S.screen='home';render()});
-    c.on('error',()=>{S.message='ルームに接続できませんでした';render()});
-  }catch(e){
-    // If the fixed host ID does not exist, become host.
-    try{
-      if(S.peer)S.peer.destroy();
-      S.isHost=true;S.peerNames=new Map();
-      S.peer=new Peer(`hb-${S.code}`);
-      S.peer.on('open',()=>{S.players=[S.peer.id];S.peerNames.set(S.peer.id,S.name);S.screen='room';render()});
-      S.peer.on('connection',c=>hostAccept(c));
-      S.peer.on('error',()=>{S.message='このルームは既に使用中です。コードを変えてください。';render()});
-    }catch(_){S.message='オンライン接続を開始できませんでした';render()}
-  }
+  
+  if(S.peer)S.peer.destroy();
+  S.peerNames=new Map();
+
+  S.isHost=true;
+  S.peer=new Peer(`hb-${S.code}`);
+
+  S.peer.on('open',()=>{
+    S.message='';
+    S.players=[S.peer.id];
+    S.peerNames.set(S.peer.id,S.name);
+    S.screen='room';
+    render();
+  });
+
+  S.peer.on('connection',c=>hostAccept(c));
+
+  S.peer.on('error',(err)=>{
+    if(err.type==='unavailable-id'){
+      S.isHost=false;
+      S.peer.destroy();
+      S.peer=new Peer();
+      
+      S.peer.on('open',()=>{
+        const hostId=`hb-${S.code}`;
+        const c=S.peer.connect(hostId,{reliable:true,metadata:{name:S.name}});
+        S.hostConn=c;
+        
+        c.on('open',()=>{
+          S.message='';
+          c.send({type:'hello',name:S.name});
+          S.screen='room';
+          render();
+        });
+        
+        c.on('data',handleClientData);
+        c.on('close',()=>{
+          S.message='ホストとの接続が切れました';
+          S.screen='home';
+          render();
+        });
+        c.on('error',()=>{
+          S.message='ルームに接続できませんでした';
+          render();
+        });
+      });
+    }else{
+      S.message='接続エラーが発生しました: '+err.type;
+      render();
+    }
+  });
 }
 function handleClientData(d){
   if(!d)return;
