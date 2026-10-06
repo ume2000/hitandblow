@@ -38,8 +38,7 @@ const S={
   secret:[],current:[],mine:[],theirs:[],turn:false,first:false,
   pending:null,oppSecret:null,over:null,message:'',
   tournament:{res:{},att:{s0:0,s1:0,f:0}},match:null,
-  spectators:new Map(),spectating:false,spectateLog:null,lb:[],
-  peerNames:new Map(),currentMatchPlayers:[]
+  spectators:new Map(),spectating:false,spectateLog:null,lb:[]
 };
 
 function num(){return S.cfg.m==='n'}
@@ -117,7 +116,7 @@ function render(){
       (!S.cfg.tn?grp('観戦',opt('sp',1,'許可')+opt('sp',0,'不可')):'')+
       grp('ランキング',opt('rk',1,'記録')+opt('rk',0,'記録しない'))
       :`<div>${cfgTxt(S.cfg)}</div>`}</div>
-      <div class="pn"><div class="t">参加者</div>${S.players.map((p,i)=>`<div style="padding:3px 0">${i+1}. ${esc(S.peerNames?.get(p)\vert{}\vert{}playerLabel(p))}${p===S.peer?.id?'（あなた）':''}</div>`).join('')}</div>
+      <div class="pn"><div class="t">参加者</div>${S.players.map((p,i)=>`<div style="padding:3px 0">${i+1}. ${esc(S.peerNames?.get(p)\vert{}\vert{}playerLabel(p))}${p===S.peer.id?'（あなた）':''}</div>`).join('')}</div>
       ${S.isHost?`<button class="m" id="start" ${S.players.length<need?'disabled':''}>${S.players.length<need?`あと${need-S.players.length}人待っています`:'この設定で開始'}</button>`:'<div class="ctr" style="color:var(--mu)">ホストの開始を待っています…</div>'}
       <div class="copy">相手にはルームコード「${esc(S.code)}」を伝えてください</div>`;
   }else if(sc==='full'){
@@ -128,4 +127,220 @@ function render(){
     [['準決勝1','s0'],['準決勝2','s1'],['決勝','f']].forEach(([n,id])=>{
       const p=pairOf(id);h+=`<div style="display:flex;justify-content:space-between;padding:6px 0"><span>${n}: ${playerLabel(p[0])} vs ${playerLabel(p[1])}</span><b>${R[id]?'勝者 '+playerLabel(R[id]):'-'}</b></div>`;
     });
-    
+    h+=`</div>${R.f?`<div class="pn ctr"><div class="big">${R.f===S.peer.id?'優勝!':'終了'}</div><div class="t">優勝: ${playerLabel(R.f)}</div></div>`:
+      m?`<button class="m" id="gm" data-m="${m}">${m==='f'?'決勝へ':'試合を始める'}</button>`:'<div class="ctr" style="color:var(--mu)">他の試合の結果を待っています…</div>'}`;
+  }else if(sc==='setup'){
+    h+=`<div class="ctr" style="color:var(--mu)">${cfgTxt(S.cfg)}${S.cfg.tn?' ('+S.match+')':''}</div>
+    <div class="pn ctr"><div class="t">あなたの答え(${num()?'数字4桁':'4色'}・重複なし)</div><div style="display:flex;justify-content:center;gap:10px">${toks(S.secret,44)}</div></div>
+    <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">${pal('c',i=>S.secret.includes(i)||S.ready)}</div>
+    <div style="display:flex;gap:8px"><button id="clr" style="flex:1" ${S.ready?'disabled':''}>やり直す</button><button class="m" id="ok" style="flex:2" ${S.secret.length<L||S.ready?'disabled':''}>決定</button></div>
+    <div class="status">${S.ready&&!S.oppReady?'相手の準備を待っています…':''}</div>`;
+  }else if(sc==='spec'){
+    const g=S.spectateLog;
+    h+=`<div class="ctr" style="color:var(--mu)">観戦中 ${g?cfgTxt(g.cfg):''}</div>`;
+    if(!g)h+='<div class="pn ctr">対戦の更新を待っています…</div>';
+    else h+=`<div style="display:flex;gap:10px"><div class="pn" style="flex:1"><div class="t">プレイヤーA(先攻)</div>${rows(g.a,g.cfg.lim||6)}</div><div class="pn" style="flex:1"><div class="t">プレイヤーB</div>${rows(g.b,g.cfg.lim||6)}</div></div>${g.over?`<div class="pn ctr big">${g.over==='draw'?'引き分け':g.over==='win'?'Aの勝ち':'Bの勝ち'}</div>`:''}`;
+  }else{
+    const lim=S.cfg.lim;
+    h+=`<div class="ctr"><span style="background:${S.turn&&!S.over?'var(--ac)':'#3a4357'};color:${S.turn&&!S.over?'#1b1209':'var(--tx)'};border-radius:20px;padding:6px 16px;font-weight:900">${S.over?'対戦終了':S.turn?'あなたの番':'相手の番'}${lim&&!S.over?` (${S.mine.length}/${lim}手)`:''}</span></div>
+    <div style="display:flex;gap:10px"><div class="pn" style="flex:1"><div class="t">あなたの推理</div>${rows(S.mine,lim||6)}</div><div class="pn" style="flex:1"><div class="t">相手の推理</div>${rows(S.theirs,lim||6)}</div></div>`;
+    if(S.over)h+=`<div class="pn ctr"><div class="big">${{win:'WIN',lose:'LOSE',draw:'DRAW'}[S.over]}</div><div class="t" style="margin-top:8px">相手の答え</div><div style="display:flex;justify-content:center;gap:8px">${S.oppSecret?toks(S.oppSecret,36):'…'}</div></div>${S.cfg.tn?(S.over==='draw'?'<button class="m" id="rem">引き分けのため再戦</button>':'<button class="m" id="tb">トーナメント表へ</button>'):'<button class="m" id="again">もう一回</button>'}`;
+    else h+=`<div class="pn"><div style="display:flex;justify-content:center;gap:10px;margin-bottom:10px">${toks(S.current,40)}</div>
+      <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">${pal('g',i=>S.current.includes(i)||!S.turn)}</div>
+      <div style="display:flex;gap:8px"><button id="del" style="flex:1" ${S.turn?'':'disabled'}>消す</button><button class="m" id="sub" style="flex:2" ${S.turn&&S.current.length===L?'':'disabled'}>この組み合わせで推理</button></div></div>`;
+  }
+  $('app').innerHTML=h;bind();
+}
+function renderLB(){
+  const lb=JSON.parse(localStorage.getItem('hb-rank')||'[]');
+  return lb.length?lb.slice(0,10).map((r,i)=>`<div style="display:flex;justify-content:space-between;padding:4px 2px"><span>${i+1}. ${esc(r.n)}</span><span>${r.w}勝 ${r.l}敗 ${r.d}分</span></div>`).join(''):'<div style="color:var(--mu)">まだ記録がありません</div>';
+}
+function record(r){
+  if(!S.cfg.rk)return;
+  const key=(S.name||'名無し').trim()||'名無し';
+  let lb=JSON.parse(localStorage.getItem('hb-rank')||'[]');
+  let x=lb.find(a=>a.n===key);if(!x){x={n:key,w:0,l:0,d:0};lb.push(x)}
+  x[r==='win'?'w':r==='lose'?'l':'d']++;
+  lb.sort((a,b)=>b.w-a.w||a.l-b.l);localStorage.setItem('hb-rank',JSON.stringify(lb.slice(0,50)));
+}
+function resetGame(){
+  Object.assign(S,{secret:[],current:[],mine:[],theirs:[],turn:false,first:false,ready:false,oppReady:false,pending:null,oppSecret:null,over:null});
+}
+function send(msg){
+  if(S.isHost){
+    for(const c of S.connections.values())if(c.open)c.send(msg);
+  }else if(S.hostConn?.open)S.hostConn.send(msg);
+}
+function broadcast(msg,except){
+  for(const [id,c] of S.connections)if(id!==except&&c.open)c.send(msg);
+}
+function statePacket(){return {type:'state',players:S.players,cfg:S.cfg,names:[...S.peerNames.entries()]}}
+function hostBroadcastState(){if(S.isHost)broadcast(statePacket())}
+function peerName(id){return S.peerNames?.get(id)||playerLabel(id)}
+function setupPeer(){
+  return new Promise((resolve,reject)=>{
+    const id=S.isHost?`hb-${S.code}`:undefined;
+    S.peer=new Peer(id);
+    S.peer.on('open',()=>resolve());
+    S.peer.on('error',e=>reject(e));
+    S.peer.on('connection',c=>{if(S.isHost)hostAccept(c)});
+  });
+}
+function hostAccept(c){
+  if(S.connections.size >= (S.cfg.tn?3:1)){c.on('open',()=>c.send({type:'full'}));return}
+  c.on('open',()=>{
+    S.connections.set(c.peer,c);
+    S.peerNames.set(c.peer,c.metadata?.name||'名無し');
+    if(!S.players.includes(c.peer))S.players.push(c.peer);
+    c.send(statePacket());render();
+    c.on('data',d=>hostData(c,d));c.on('close',()=>hostDisconnect(c.peer));
+  });
+}
+function hostDisconnect(id){
+  S.connections.delete(id);S.players=S.players.filter(p=>p!==id);render();hostBroadcastState();
+}
+function hostData(c,d){
+  if(!d||!d.type)return;
+  if(d.type==='hello'){S.peerNames.set(c.peer,d.name||'名無し');c.send(statePacket());render();return}
+  if(d.type==='cfg'&&S.isHost&&!S.started){S.cfg=d.cfg;hostBroadcastState();render();return}
+  if(d.type==='go'&&S.isHost){applyStart(d);broadcast(d);return}
+  if(d.type==='ready'&&S.started){gameRelay(c,d);return}
+  if(d.type==='guess'&&S.started){gameRelay(c,d);return}
+  if(d.type==='result'&&S.started){gameRelay(c,d);return}
+  if(d.type==='reveal'&&S.started){gameRelay(c,d);return}
+  if(d.type==='tw'){S.tournament.res[d.id]=d.w;broadcast(d);render();return}
+  if(d.type==='log'){broadcast(d,c.peer);return}
+}
+function gameRelay(c,d){
+  if(d.type==='guess'){
+    const p=S.players.find(x=>x!==c.peer);const target=S.connections.get(p);
+    if(target?.open)target.send(d);
+  }else if(d.type==='result'||d.type==='ready'||d.type==='reveal'||d.type==='log'){
+    const p=S.players.find(x=>x!==c.peer);const target=S.connections.get(p);
+    if(target?.open)target.send(d);
+  }
+}
+async function joinRoom(){
+  S.name=($('name')?.value||S.name).trim()||'名無し';
+  S.message='';
+  if(!S.code){S.message='コードを入力してください';render();return}
+  try{
+    if(S.peer)S.peer.destroy();
+    S.isHost=false;S.peerNames=new Map();
+    await setupPeer();
+    const hostId=`hb-${S.code}`;
+    const c=S.peer.connect(hostId,{reliable:true,metadata:{name:S.name}});
+    S.hostConn=c;
+    c.on('open',()=>{c.send({type:'hello',name:S.name});S.screen='room';render()});
+    c.on('data',handleClientData);
+    c.on('close',()=>{S.message='ホストとの接続が切れました';S.screen='home';render()});
+    c.on('error',()=>{S.message='ルームに接続できませんでした';render()});
+  }catch(e){
+    // If the fixed host ID does not exist, become host.
+    try{
+      if(S.peer)S.peer.destroy();
+      S.isHost=true;S.peerNames=new Map();
+      S.peer=new Peer(`hb-${S.code}`);
+      S.peer.on('open',()=>{S.players=[S.peer.id];S.peerNames.set(S.peer.id,S.name);S.screen='room';render()});
+      S.peer.on('connection',c=>hostAccept(c));
+      S.peer.on('error',()=>{S.message='このルームは既に使用中です。コードを変えてください。';render()});
+    }catch(_){S.message='オンライン接続を開始できませんでした';render()}
+  }
+}
+function handleClientData(d){
+  if(!d)return;
+  if(d.type==='full'){S.screen='full';render();return}
+  if(d.type==='state'){
+    S.players=d.players;S.cfg=d.cfg;S.peerNames=new Map(d.names||[]);
+    S.isHost=false;render();return
+  }
+  if(d.type==='go'){applyStart(d);return}
+  if(d.type==='ready'){S.oppReady=true;startGameIfReady();return}
+  if(d.type==='guess')receiveGuess(d); 
+  else if(d.type==='result')receiveResult(d);
+  else if(d.type==='reveal'){S.oppSecret=d.s;render()}
+  else if(d.type==='tw'){S.tournament.res[d.id]=d.w;render()}
+  else if(d.type==='log'){if(S.screen==='spec'){S.spectateLog=d;render()}}
+}
+function applyStart(d){
+  S.started=true;S.roomStarted=true;S.cfg=d.cfg;S.players=d.players||S.players;
+  if(S.cfg.tn){S.tournament={res:{},att:{s0:0,s1:0,f:0}};S.screen='brk'}
+  else{
+    const i=S.players.indexOf(S.peer.id);
+    if(i<0){S.screen=S.cfg.sp?'spec':'full';return}
+    S.role=i===0?'host':'guest';S.first=i===0;resetGame();S.screen='setup'
+    if(!S.isHost)S.hostConn?.send({type:'hello',name:S.name});
+  }
+  render();
+}
+function doStart(){
+  const need=S.cfg.tn?4:2;if(S.players.length<need)return;
+  const d={type:'go',cfg:{...S.cfg},players:S.players.slice(0,need)};
+  applyStart(d);if(S.isHost)broadcast(d);
+}
+function goMatch(id){
+  const p=pairOf(id);if(!p.every(Boolean))return;
+  S.match=id;resetGame();S.screen='setup';
+  S.first=p[0]===S.peer.id;
+  if(S.isHost){
+    S.currentMatchPlayers=p;
+    broadcast({type:'match',id,players:p,att:S.tournament.att[id]});
+  }else S.hostConn?.send({type:'match',id,players:p,att:S.tournament.att[id]});
+  render();
+}
+function confirmSecret(){
+  S.ready=true;
+  send({type:'ready',s:S.secret});
+  startGameIfReady();
+}
+function startGameIfReady(){
+  if(S.ready&&S.oppReady&&S.secret.length===L){S.screen='battle';S.turn=S.first;render();sendLog()}
+}
+function submitGuess(){
+  S.pending=S.current.slice();S.current=[];S.turn=false;send({type:'guess',g:S.pending});render()
+}
+function receiveGuess(d){
+  const [h,b]=score(S.secret,d.g);S.theirs.push({g:d.g,h,b});send({type:'result',h,b});settle();render()
+}
+function receiveResult(d){
+  S.mine.push({g:S.pending,h:d.h,b:d.b});settle();render()
+}
+function settle(){
+  const f=S.first?S.mine.length:S.theirs.length,s=S.first?S.theirs.length:S.mine.length;
+  const mc=S.mine.some(r=>r.h===L),oc=S.theirs.some(r=>r.h===L);let r=null;
+  if((mc||oc)&&(!S.cfg.lm||s>=f))r=mc&&oc?'draw':mc?'win':'lose';
+  else if(S.cfg.lim&&f>=S.cfg.lim&&s>=S.cfg.lim)r='draw';
+  if(r){
+    S.over=r;S.turn=false;send({type:'reveal',s:S.secret});
+    record(r);
+    if(S.cfg.tn&&S.match){
+      if(r==='draw')S.tournament.att[S.match]++;
+      else if(r==='win'){S.tournament.res[S.match]=S.peer.id;send({type:'tw',id:S.match,w:S.peer.id})}
+    }
+  }else S.turn=S.first?f===s:f>s;
+  sendLog();
+}
+function sendLog(){
+  const log={type:'log',a:S.mine,b:S.theirs,cfg:S.cfg,over:S.over};
+  send(log)
+}
+function bind(){
+  const on=(id,fn)=>{const e=$(id);if(e)e.onclick=fn};
+  on('m2',()=>{S.cfg.tn=0;S.screen='lobby';render()});
+  on('m4',()=>{S.cfg.tn=1;S.screen='lobby';render()});
+  on('rnd',()=>{S.code=String(Math.floor(100000+Math.random()*900000));render()});
+  on('go',joinRoom);on('bk',()=>{S.screen='home';render()});on('homeBtn',()=>{S.screen='home';render()});
+  on('start',doStart);on('gm',()=>goMatch($('gm').dataset.m));
+  on('tb',()=>{S.screen='brk';render()});
+  on('rem',()=>{if(S.match)goMatch(S.match)});
+  on('again',()=>{resetGame();S.screen='setup';render();send({type:'again'})});
+  on('clr',()=>{S.secret=[];render()});on('ok',confirmSecret);
+  on('del',()=>{S.current.pop();render()});on('sub',submitGuess);
+  const name=$('name');if(name)name.oninput=()=>S.name=name.value;
+  const cd=$('cd');if(cd)cd.oninput=()=>S.code=cd.value.trim();
+  document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{
+    const k=b.dataset.s;S.cfg[k]=k==='m'?b.dataset.v:+b.dataset.v;
+    if(S.isHost)hostBroadcastState();render()
+  });
+  document.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{if(S.secret.length<L){S.secret.push(+b.dataset.c);render()}});
+  document.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>{if(S.current.length<L){S.current.push(+b.dataset.g);rende
